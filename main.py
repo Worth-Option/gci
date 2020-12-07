@@ -56,12 +56,11 @@ if os.path.exists('treatment/results'):
     shutil.rmtree('treatment/results')
 os.makedirs('treatment/results')
 
-# Import CSV
-exec(open("bin/import.py").read());
-
 analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
 
 if analysisType == 1:
+    # Import CSV
+    exec(open("bin/import.py").read());
     # Grid Convergence Analysis (RANS)
     exec(open("bin/gci.py").read());
 else:

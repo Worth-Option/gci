@@ -30,8 +30,10 @@ This script analyses numerical and modeling errors in LES simulations
 
 import os
 import re
+import openpyxl
 import pandas as pd
 from detect_delimiter import detect
+from scipy.optimize import fsolve
 
 def cls():
     """
@@ -155,7 +157,23 @@ else:
     infoDf = caseInfo(testVersion)
 
 # Import simulation data
-simDf = caseImport(testVersion)
+nVar = int(input("""[1] Single data point
+[2] Multiple data point (line)
+Choice: """))
+cls()
+var = input("Write the name of the desired variable: ")
+if nVar == 1:
+    cls()
+    print("Please insert the point value for the meshes")
+    simDf = dict()
+    for ii in range(testVersion):
+        jj = str(ii)
+        lst = [float(input("Mesh "+jj+" value: "))]
+        simDf['Mesh '+jj] = pd.DataFrame(data=lst,columns=[var])
+    del ii,jj,lst
+elif nVar == 2:
+    simDf = caseImport(testVersion)
+del nVar
 
 # Starts evaluating the GCI
 infoDf.eval('h = (@infoDf.Volume[0]/Elements)**(1/3)', inplace=True)
@@ -166,7 +184,6 @@ r = infoDf.r.mean()
 hstar = infoDf.hstar.mean()
 
 ## Simulated data
-var = input("Write the name of the desired variable: ")
 s1 = simDf['Mesh 0'][var]
 s2 = simDf['Mesh 1'][var]
 s3 = simDf['Mesh 2'][var]
@@ -174,12 +191,108 @@ if testVersion == 5:
     s4 = simDf['Mesh 3'][var]
     s5 = simDf['Mesh 4'][var]
 
-# Simplified method
-cm = (r**(1.7)*(s1-s2)-(s2-s3))/((r**(1.7)-r**(1.5)-r**(3.2)+r**(3))\
-      *delta**(1.5))
-sc = ((r**(1.7)*s1-s2)*(r**(3.2)-r**(3))-(r**(1.7)*s2-s3)*(r**(1.7)\
-      -r**(1.5)))/((r**(1.7)-1)*((r**(3.2)-r**(3))-(r**(1.7)-r**(1.5))))
-cn = (s1-sc-cm*delta**(1.5))/(hstar**(1.7))
-
+if testVersion == 3:
+    # Simplified method
+    """
+    This section of the code implements the 3 equation proceedure from
+    Dutta, R. and Xing, T. (2018)
+    ‘Five-equation and robust three-equation methods for solution verification of large eddy simulation’
+    Journal of Hydrodynamics, 30(1), pp. 23–33. doi: 10.1007/s42241-018-0002-0.
+    """
     
+    pn = 1.7
+    pm = 1.5
+    cm = (r**(1.7)*(s1-s2)-(s2-s3))/((r**(1.7)-r**(1.5)-r**(3.2)+r**(3))\
+          *delta**(1.5))
+    sc = ((r**(1.7)*s1-s2)*(r**(3.2)-r**(3))-(r**(1.7)*s2-s3)*(r**(1.7)\
+          -r**(1.5)))/((r**(1.7)-1)*((r**(3.2)-r**(3))-(r**(1.7)-r**(1.5))))
+    cn = (s1-sc-cm*delta**(1.5))/(hstar**(1.7))
+    
+    Enum = dict()
+    Enum[0] = cn*(hstar**1.7)
+    Enum[1] = cn*(r**1.7)*(hstar**1.7)
+    Enum[2] = cn*(r**3.4)*(hstar**1.7)
+    
+    Emod = dict()
+    Emod[0] = cm*(delta**1.5)
+    Emod[1] = cm*(r**1.5)*(delta**1.5)
+    Emod[2] = cm*(r**3)*(delta**1.5)
+    
+    jj=0
+    for ii in simDf:
+        simDf[ii]['Sc'] = sc
+        simDf[ii]['Numerical Error'] = Enum[jj]
+        simDf[ii]['Modelling Error'] = Emod[jj]
+        simDf[ii]['Total Error'] = Enum[jj] + Emod[jj]
+        jj+=1
+    del ii,jj
 
+elif testVersion == 5:
+    # Full method
+    """
+    This section of the code implements the 5 equation proceedure from
+    Dutta, R. and Xing, T. (2018)
+    ‘Five-equation and robust three-equation methods for solution verification of large eddy simulation’
+    Journal of Hydrodynamics, 30(1), pp. 23–33. doi: 10.1007/s42241-018-0002-0.
+    """
+    def fullMethod(vars):
+    # =========================================================================
+    #     Sets the nonlinear system of 5 equations
+    # =========================================================================
+        sc, cn, cm, pn, pm = vars
+        eq1 = cn*hstar**pn + cm*delta**pm
+        eq2 = cn*(r*hstar)**pn + cm*(r*delta)**pm
+        eq3 = cn*((r**2)*hstar)**pn + cm*((r**2)*delta)**pm
+        eq4 = cn*((r**3)*hstar)**pn + cm*((r**3)*delta)**pm
+        eq5 = cn*((r**4)*hstar)**pn + cm*((r**4)*delta)**pm
+        return [eq1, eq2, eq3, eq4, eq5]
+    
+    sc, cn, cm, pn, pm =  fsolve(fullMethod, (0.007, 1, 1, 1.7, 1.5))
+    Enum = dict()
+    for ii in range(testVersion):
+        if ii == 0:
+            val = cn*hstar**pn
+        else:
+            val = cn*((r**ii)*hstar)**pn
+        Enum[ii]=val
+    
+    Emod = dict()
+    for ii in range(testVersion):
+        if ii == 0:
+            val = cm*delta**pm
+        else:
+            val = cm*((r**ii)*delta)**pm
+        Emod[ii]=val
+    
+    jj=0
+    for ii in simDf:
+        simDf[ii]['Sc'] = sc
+        simDf[ii]['Numerical Error'] = Enum[jj]
+        simDf[ii]['Modelling Error'] = Emod[jj]
+        simDf[ii]['Total Error'] = Enum[jj] + Emod[jj]
+        jj+=1
+    del ii, jj, val, var
+
+# Export Results to Excel
+d = {'Order of Accuracy for the Numerical Error (Pn)': pn,
+     'Order of Accuracy for the Modelled Error (Pm)': pm,
+     'Mean Constant for Numerical Errors (Cn)': cn.mean(),
+     'Mean Constant for Modelled Errors (Cm)': cm.mean(),
+     'Delta': delta,
+     'Hstar': hstar,
+     'Mean Refinement Rate': r
+    }
+idx = [0]
+
+summary = pd.DataFrame(data=d, index=idx)
+xlsxFile = 'treatment/results/dataSummary.xlsx'
+if not os.path.isfile(xlsxFile):
+    wb = openpyxl.Workbook()
+    wb.save(xlsxFile)
+    
+with pd.ExcelWriter(xlsxFile, engine="openpyxl", mode='a') as writer:
+    summary.to_excel(writer, sheet_name='Summary', index=False)
+    for df_name, df in simDf.items():
+        df.to_excel(writer, sheet_name=df_name, index=False)
+
+del d, idx, xlsxFile
