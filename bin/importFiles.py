@@ -72,3 +72,6 @@ medium = medium.sort_values('Axis')
 finer = finer.sort_values('Axis')
 
 cls()
+
+print("""Importing Done...
+Elapsed Time %.3f s\n""" %(time.time() - start_time))

@@ -7,7 +7,6 @@
 cycler==0.10.0
     # via matplotlib
 detect-delimiter==0.1.1
-    # https://pypi.org/project/detect-delimiter/
     # via -r requirements.in
 et-xmlfile==1.0.1
     # via openpyxl
