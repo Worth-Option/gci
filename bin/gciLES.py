@@ -32,6 +32,7 @@ import os
 import re
 import openpyxl
 import pandas as pd
+import matplotlib.pyplot as plt
 from detect_delimiter import detect
 from scipy.optimize import fsolve
 
@@ -110,7 +111,7 @@ def caseImport(ncases):
         lst = []
         print("Write the mesh number succeeded by the file name:\n")
         for ii in range(ncases): 
-            file = [input(), int(input())] 
+            file = [int(input()), input()] 
             lst.append(file) 
         df = pd.DataFrame(data=lst, columns=["Size","Filename"])
         df.index.names = ['Mesh']
@@ -162,6 +163,7 @@ nVar = int(input("""[1] Single data point
 Choice: """))
 cls()
 var = input("Write the name of the desired variable: ")
+axis = input("Write the name of the desired plot axis: ")
 if nVar == 1:
     cls()
     print("Please insert the point value for the meshes")
@@ -296,3 +298,43 @@ with pd.ExcelWriter(xlsxFile, engine="openpyxl", mode='a') as writer:
         df.to_excel(writer, sheet_name=df_name, index=False)
 
 del d, idx, xlsxFile
+
+# All meshes
+fig, ax = plt.subplots(figsize=(9,6), dpi=300)
+ax.plot(simDf['Mesh 0'][axis], simDf['Mesh 0'][var],
+            label= 'Mesh 0', aa=True)
+ax.plot(simDf['Mesh 1'][axis], simDf['Mesh 1'][var],
+            label= 'Mesh 1', aa=True)
+ax.plot(simDf['Mesh 2'][axis], simDf['Mesh 2'][var],
+            label= 'Mesh 2', aa=True)
+if testVersion == 5:
+    ax.plot(simDf['Mesh 3'][axis], simDf['Mesh 3'][var],
+            label= 'Mesh 3 - Coarser', aa=True)
+    ax.plot(simDf['Mesh 4'][axis], simDf['Mesh 4'][var],
+            label= 'Mesh 4 - Coarser', aa=True)
+
+ax.legend(loc='best',fontsize='x-large')
+
+plt.grid()
+plt.autoscale(enable=True, tight=True)
+plt.xlabel(axis,fontsize='x-large')
+plt.ylabel(var,fontsize='x-large')
+plt.savefig('treatment/results/allMeshes.png', bbox_inches='tight')
+
+# Plot with error bars
+fig, ax = plt.subplots(figsize=(9,6), dpi=300)
+l, caps, c = plt.errorbar(simDf['Mesh 1'][axis], simDf['Mesh 1'][var],
+            simDf['Mesh 1']['Total Error'],
+            elinewidth = 1, capsize = 5, capthick = 1, marker = 'o',
+#            errorevery = 5,
+            uplims = True, lolims = True, 
+            lw=1.5, aa = True)
+
+for cap in caps:
+    cap.set_marker("_")
+    
+plt.grid()
+plt.autoscale(enable=True, tight=True)
+plt.xlabel(axis,fontsize='x-large')
+plt.ylabel(var,fontsize='x-large')
+plt.savefig('treatment/results/Mesh1.png', bbox_inches='tight')
