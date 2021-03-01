@@ -34,9 +34,6 @@ import sys
 import os
 import shutil
 import time
-# Imports modules
-sys.path.append('bin/')
-
 start_time = time.time()
 
 def cls():
@@ -63,13 +60,9 @@ analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
 
 if analysisType == 1:
     # Import CSV
-    importFiles()
+    exec(open("bin/import.py").read());
     # Grid Convergence Analysis (RANS)
-    gci()
+    exec(open("bin/gci.py").read());
 else:
     # Grid Convergence Analysis (LES)
-    import gciLES
-    
-
-print("All calculations done.\nCheck folder results.")
-print("Elapsed Time %.3f s\n""" %(time.time() - start_time))
+    exec(open("bin/gciLES.py").read());
