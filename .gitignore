@@ -3,3 +3,6 @@ treatment/*
 
 # Dependencies List
 requirements.in
+
+# vscode
+.vscode/*
