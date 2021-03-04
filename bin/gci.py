@@ -5,10 +5,11 @@ import os
 import re
 import sys
 import openpyxl
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from detect_delimiter import detect
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, minimize
 
 if __name__ == "__main__":
     sys.exit('This file must run as a module, please run main.py')
@@ -129,34 +130,93 @@ def run(nVar, var, axis):
         simDf = caseImport(3)
     del nVar
 
-    def refinementRate(volume, elements):
+    def refinementRate(df):
         exponent = input("Type of Analysis\n[1] 2D\n[2] 3D\nChosen Option: ")
         if exponent == "1":
-            exponent = 1/2
+            df.eval('h = (Volume[0]/Elements)**(1/2)', inplace=True)
         elif exponent == "2":
-            exponent = 1/3
+            df.eval('h = (Volume[0]/Elements)**(1/3)', inplace=True)
         else:
-            sys.exit("Invalid option")  
-        h = list()
-        for ii in range(2, -1, -1):
-            h[ii] = (volume/elements[ii])**exponent   
-        r = list()
-        r[0] = h[1]/h[0]
-        r[1] = h[2]/h[1]    
-        return r
+            sys.exit("Invalid option")
 
-    r = refinementRate(infoDf.Volume[0], infoDf.Elements)
+        r = [i for i in range(2)]
+        r[0] = df.h[1]/df.h[0]
+        r[1] = df.h[2]/df.h[1]
+        r = pd.Series(r, name="r")
+        df = pd.concat([df, r], ignore_index=True, axis=1)
+        df.columns = ["Cells", "Volume", "h", "r"]
+        return df
+
+    # Refinement rate
+    infoDf = refinementRate(infoDf)
+    
+    # Data Processing
+    simData = dict()
+    for ii in range(3):
+        variable = simDf['Mesh '+str(ii)][var]
+        variable.index = simDf['Mesh '+str(ii)][axis]
+        variable.name = "Mesh "+str(ii)
+        simData['Mesh '+str(ii)] = variable
+        
+    del simDf, variable
+    
     # Variable absolute error
-    desiredVar = pd.concat([finer, medium, coarser], axis=1)
-    desiredVar = desiredVar.interpolate('index').reindex(medium.index)
-    e21 = desiredVar.Variable_medium - desiredVar.Variable_finer
-    e32 = desiredVar.Variable_coarser - desiredVar.Variable_medium
-    desiredVar['e21'] = e21
-    desiredVar['e32'] = e32
+    desiredVar = pd.concat([simData["Mesh 0"],\
+                            simData["Mesh 1"],\
+                            simData["Mesh 2"]], axis=1)
+    desiredVar = desiredVar.interpolate('index').reindex(simData["Mesh 1"].index)
+    desiredVar.dropna(inplace=True)
+    desiredVar['e21'] = desiredVar["Mesh 1"] - desiredVar["Mesh 2"]
+    desiredVar['e32'] = desiredVar["Mesh 0"] - desiredVar["Mesh 1"]
 
     # Sign
     sign = np.sign(desiredVar['e32']/desiredVar['e21'])
     desiredVar['Sign'] = sign
 
     # p 
-    p = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+order)/np.log(r21))
+#    p = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+order)/np.log(infoDf.r[0]))
+
+    # Error Order
+    initial = np.repeat(2.0, len(desiredVar.index))
+    
+    def aparentOrder(order, df):
+        order = np.abs(order)
+        q = np.log(((infoDf.r[0]**order)-desiredVar.Sign)/((desiredVar.r[1]**order)-desiredVar.Sign))
+        ap = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+q))/np.log(infoDf.r[0])
+        error = np.abs(order - ap)
+        error = np.array(error.values.tolist()) #converts to array
+        return np.mean(error)
+    
+    res = minimize(aparentOrder, args=(desiredVar),
+                            x0=initial, method = 'Nelder-Mead', tol=0.01,
+                            options={'maxiter':1000})
+    
+    order = res.x
+    q = np.log((infoDf.r[0]**order-desiredVar.Sign)/(desiredVar.r[1]**order-desiredVar.Sign))
+    ap = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+q))/np.log(infoDf.r[0])
+    orderError = order - ap
+    
+    desiredVar['Aparent Order'] = ap
+    desiredVar['Optimized Order'] = order
+    desiredVar['Order Error'] = orderError
+    
+    # Extrapolated values
+    ext21 = ((infoDf.r[0]**ap)*desiredVar.Variable_finer-desiredVar.Variable_medium)/((infoDf.r[0]**ap)-1)
+    ext32 = ((desiredVar.r[1]**ap)*desiredVar.Variable_medium-desiredVar.Variable_coarser)/((desiredVar.r[1]**ap)-1)
+    
+    desiredVar['Extrapolated Value (Finer, Medium)'] = ext21
+    desiredVar['Extrapolated Value (Medium, Coarser)'] = ext32
+    
+    # Calculate and report the error estimatives
+    apxRelErr = np.abs((desiredVar.Variable_finer-desiredVar.Variable_medium)/desiredVar.Variable_finer)
+    extRelErr = np.abs((ext21-desiredVar.Variable_finer)/ext21)
+    gci = (1.25*apxRelErr)/((infoDf.r[0]**ap)-1)
+    
+    desiredVar['Aproximated Relative Error'] = apxRelErr
+    desiredVar['Extrapolated Relative Error'] = extRelErr
+    desiredVar['Grid Convergence Index'] = gci
+    
+    # Export generated table
+    desiredVar.to_excel("treatment/results/gci.xlsx")   
+
+
