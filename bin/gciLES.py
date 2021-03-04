@@ -130,7 +130,7 @@ def caseImport(ncases):
         importedFiles['Mesh '+str(ii)] = temp
     return importedFiles
 
-def refinementRate(df):
+def refinementRate(df, testVersion):
     """
     Defines the refinement rate between the meshes
     """
@@ -144,31 +144,31 @@ def refinementRate(df):
     df['r'] = r
     return df
 
-def main():
+def run(testVersion, nVar, var, axis):
     # Import the case structure data (mesh and timestep)
-    testVersion = int(input("""Which test should be performed?
-    [1] Short Version (3 cases)
-    [2] Long Version (5 cases)
-    Choice: """))
-    if testVersion == 1:
-        testVersion = 3
-    else:
-        testVersion = 5
-    
+    ##testVersion = int(input("Which test should be performed?\n"
+    ##                        "[1] Short Version (3 cases)\n"
+    ##                        "[2] Long Version (5 cases)\n"
+    ##                        "Choice: "))
+    ##if testVersion == 1:
+    ##    testVersion = 3
+    ##else:
+    ##    testVersion = 5
+
     infoFile = 'treatment/caseInformation.csv'
     if os.path.exists(infoFile):
         infoDf = pd.read_csv(infoFile)
     else: 
         print ("Please state the meshes from the finer to the coarser")  
         infoDf = caseInfo(testVersion)
-    
+
     # Import simulation data
-    nVar = int(input("""[1] Single data point
-    [2] Multiple data point (line)
-    Choice: """))
+    ##nVar = int(input("""[1] Single data point
+    ##[2] Multiple data point (line)
+    ##Choice: """))
     cls()
-    var = input("Write the name of the desired variable: ")
-    axis = input("Write the name of the desired plot axis: ")
+    ##var = input("Write the name of the desired variable: ")
+    ##axis = input("Write the name of the desired plot axis: ")
     if nVar == 1:
         cls()
         print("Please insert the point value for the meshes")
@@ -181,18 +181,15 @@ def main():
     elif nVar == 2:
         simDf = caseImport(testVersion)
     del nVar
-    
-    print("""Importing Done...
-    Elapsed Time %.3f s\n""" %(time.time() - start_time))
-    
+
     # Starts evaluating the GCI
     infoDf.eval('h = (@infoDf.Volume[0]/Elements)**(1/3)', inplace=True)
     infoDf.eval('hstar = (h*DeltaT)**(1/2)', inplace=True)
-    infoDf = refinementRate(infoDf)
+    infoDf = refinementRate(infoDf, testVersion)
     delta = max(infoDf.h)
     r = infoDf.r.mean()
     hstar = infoDf.hstar.mean()
-    
+
     ## Simulated data
     s1 = simDf['Mesh 0'][var]
     s2 = simDf['Mesh 1'][var]
@@ -200,7 +197,6 @@ def main():
     if testVersion == 5:
         s4 = simDf['Mesh 3'][var]
         s5 = simDf['Mesh 4'][var]
-    
     if testVersion == 3:
         # Simplified method
         """
@@ -209,7 +205,6 @@ def main():
         ‘Five-equation and robust three-equation methods for solution verification of large eddy simulation’
         Journal of Hydrodynamics, 30(1), pp. 23–33. doi: 10.1007/s42241-018-0002-0.
         """
-        
         pn = 1.7
         pm = 1.5
         cm = (r**(1.7)*(s1-s2)-(s2-s3))/((r**(1.7)-r**(1.5)-r**(3.2)+r**(3))\
@@ -217,17 +212,14 @@ def main():
         sc = ((r**(1.7)*s1-s2)*(r**(3.2)-r**(3))-(r**(1.7)*s2-s3)*(r**(1.7)\
               -r**(1.5)))/((r**(1.7)-1)*((r**(3.2)-r**(3))-(r**(1.7)-r**(1.5))))
         cn = (s1-sc-cm*delta**(1.5))/(hstar**(1.7))
-        
         Enum = dict()
         Enum[0] = cn*(hstar**1.7)
         Enum[1] = cn*(r**1.7)*(hstar**1.7)
         Enum[2] = cn*(r**3.4)*(hstar**1.7)
-        
         Emod = dict()
         Emod[0] = cm*(delta**1.5)
         Emod[1] = cm*(r**1.5)*(delta**1.5)
         Emod[2] = cm*(r**3)*(delta**1.5)
-        
         jj=0
         for ii in simDf:
             simDf[ii]['Sc'] = sc
@@ -236,7 +228,6 @@ def main():
             simDf[ii]['Total Error'] = Enum[jj] + Emod[jj]
             jj+=1
         del ii,jj
-    
     elif testVersion == 5:
         # Full method
         """
@@ -256,7 +247,6 @@ def main():
             eq4 = cn*((r**3)*hstar)**pn + cm*((r**3)*delta)**pm
             eq5 = cn*((r**4)*hstar)**pn + cm*((r**4)*delta)**pm
             return [eq1, eq2, eq3, eq4, eq5]
-        
         sc, cn, cm, pn, pm =  fsolve(fullMethod, (0.007, 1, 1, 1.7, 1.5))
         Enum = dict()
         for ii in range(testVersion):
@@ -265,7 +255,6 @@ def main():
             else:
                 val = cn*((r**ii)*hstar)**pn
             Enum[ii]=val
-        
         Emod = dict()
         for ii in range(testVersion):
             if ii == 0:
@@ -273,7 +262,6 @@ def main():
             else:
                 val = cm*((r**ii)*delta)**pm
             Emod[ii]=val
-        
         jj=0
         for ii in simDf:
             simDf[ii]['Sc'] = sc
@@ -282,7 +270,6 @@ def main():
             simDf[ii]['Total Error'] = Enum[jj] + Emod[jj]
             jj+=1
         del ii, jj, val, var
-    
     # Export Results to Excel
     d = {'Order of Accuracy for the Numerical Error (Pn)': pn,
          'Order of Accuracy for the Modelled Error (Pm)': pm,
@@ -293,20 +280,18 @@ def main():
          'Mean Refinement Rate': r
         }
     idx = [0]
-    
     summary = pd.DataFrame(data=d, index=idx)
     xlsxFile = 'treatment/results/dataSummary.xlsx'
     if not os.path.isfile(xlsxFile):
         wb = openpyxl.Workbook()
         wb.save(xlsxFile)
-        
     with pd.ExcelWriter(xlsxFile, engine="openpyxl", mode='a') as writer:
         summary.to_excel(writer, sheet_name='Summary', index=False)
         for df_name, df in simDf.items():
             df.to_excel(writer, sheet_name=df_name, index=False)
-    
+
     del d, idx, xlsxFile
-    
+
     # All meshes
     fig, ax = plt.subplots(figsize=(9,6), dpi=300)
     ax.plot(simDf['Mesh 0'][axis], simDf['Mesh 0'][var],
@@ -320,15 +305,14 @@ def main():
                 label= 'Mesh 3 - Coarser', aa=True)
         ax.plot(simDf['Mesh 4'][axis], simDf['Mesh 4'][var],
                 label= 'Mesh 4 - Coarser', aa=True)
-    
+
     ax.legend(loc='best',fontsize='x-large')
-    
+
     plt.grid()
     plt.autoscale(enable=True, tight=True)
     plt.xlabel(axis,fontsize='x-large')
     plt.ylabel(var,fontsize='x-large')
     plt.savefig('treatment/results/allMeshes.png', bbox_inches='tight')
-    
     # Plot with error bars
     fig, ax = plt.subplots(figsize=(9,6), dpi=300)
     l, caps, c = plt.errorbar(simDf['Mesh 1'][axis], simDf['Mesh 1'][var],
@@ -337,13 +321,12 @@ def main():
     #            errorevery = 5,
                 uplims = True, lolims = True, 
                 lw=1.5, aa = True)
-    
+
     for cap in caps:
         cap.set_marker("_")
-        
+
     plt.grid()
     plt.autoscale(enable=True, tight=True)
     plt.xlabel(axis,fontsize='x-large')
     plt.ylabel(var,fontsize='x-large')
     plt.savefig('treatment/results/Mesh1.png', bbox_inches='tight')
-    

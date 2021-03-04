@@ -20,7 +20,6 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #  
-#  
 
 """
 Main module
@@ -38,6 +37,9 @@ import time
 sys.path.append('bin/')
 
 start_time = time.time()
+sys.path.append('bin/')
+import gciLES
+import gci
 
 def cls():
     """
@@ -59,17 +61,17 @@ if os.path.exists('treatment/results'):
     shutil.rmtree('treatment/results')
 os.makedirs('treatment/results')
 
-analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
+#     .run(testVersion, nVar, var, axis)
+gci.run(2,'u', "(y-y0)/H")
+#gciLES.run(3, 2, 'u', "(y-y0)/H")
 
-if analysisType == 1:
-    # Import CSV
-    importFiles()
-    # Grid Convergence Analysis (RANS)
-    gci()
-else:
-    # Grid Convergence Analysis (LES)
-    import gciLES
-    
-
-print("All calculations done.\nCheck folder results.")
-print("Elapsed Time %.3f s\n""" %(time.time() - start_time))
+##analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
+##
+##if analysisType == 1:
+##    # Import CSV
+##    exec(open("bin/import.py").read());
+##    # Grid Convergence Analysis (RANS)
+##    exec(open("bin/gci.py").read());
+##else:
+##    # Grid Convergence Analysis (LES)
+##    

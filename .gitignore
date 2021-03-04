@@ -3,3 +3,9 @@ treatment/*
 
 # Dependencies List
 requirements.in
+
+# vscode
+.vscode/*
+
+# spyder
+.spyproject/*
