@@ -4,12 +4,10 @@
 import os
 import re
 import sys
-import openpyxl
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from detect_delimiter import detect
-from scipy.optimize import fsolve, minimize
+from scipy.optimize import minimize
 
 if __name__ == "__main__":
     sys.exit('This file must run as a module, please run main.py')
@@ -20,15 +18,18 @@ def cls():
     """
     os.system('cls' if os.name=='nt' else 'clear')
 
-def caseInfo():
+def caseInfo(dimension):
     """
     Reads the case information for an n number of simulations
     """
     d = {'Elements' : [], 'Volume' : []}
+    if dimension == "1":
+        d['Volume'].append(float(input("Total cell area [m2]: ")))
+    else:
+        d['Volume'].append(float(input("Total cell volume [m3]: ")))
     for ii in range(3):
         elmt = int(input("Number of elements of the mesh {0}: ".format(ii)))
         d['Elements'].append(elmt)
-    d['Volume'].append(float(input("Total cell volume [m3]: ")))
     df = pd.DataFrame(dict([ (k,pd.Series(v)) for k,v in d.items() ]))
     df.index.names = ['Mesh']
     df.to_csv('treatment/caseInformation.csv', index = False)
@@ -102,36 +103,41 @@ def caseImport(ncases):
         importedFiles['Mesh '+str(ii)] = temp
     return importedFiles
 
-def run(nVar, var, axis):
+def run():
+    # Import simulation data
+    nVar = input("""[1] Single data point
+[2] Multiple data point (line)
+Choice: """)
+    cls()
+    dimension = input("Type of Analysis\n[1] 2D\n[2] 3D\nChosen Option: ")
+    if dimension != "1" and dimension != "2":
+            sys.exit("Invalid option")
+    var = input("Write the name of the desired variable: ")
+    if dimension == "2":
+        axis = input("Write the name of the desired plot axis: ")
+    
+    ## Collect information about the case
     infoFile = 'treatment/caseInformation.csv'
     if os.path.exists(infoFile):
         infoDf = pd.read_csv(infoFile)
     else: 
         print ("Please state the meshes from the finer to the coarser")  
-        infoDf = caseInfo()
-
-    # Import simulation data
-    ##nVar = int(input("""[1] Single data point
-    ##[2] Multiple data point (line)
-    ##Choice: """))
-    cls()
-    ##var = input("Write the name of the desired variable: ")
-    ##axis = input("Write the name of the desired plot axis: ")
-    if nVar == 1:
+        infoDf = caseInfo(dimension)
+    
+    ## Import variables to be processed
+    if nVar == "1":
         cls()
         print("Please insert the point value for the meshes")
         simDf = dict()
         for ii in range(3):
-            jj = str(ii)
-            lst = [float(input("Mesh "+jj+" value: "))]
-            simDf['Mesh '+jj] = pd.DataFrame(data=lst,columns=[var])
-        del ii,jj,lst
+            lst = [float(input("Mesh "+str(ii)+" value: "))]
+            simDf['Mesh '+str(ii)] = pd.DataFrame(data=lst,columns=[var])
     elif nVar == 2:
         simDf = caseImport(3)
-    del nVar
+    del nVar   
 
-    def refinementRate(df):
-        exponent = input("Type of Analysis\n[1] 2D\n[2] 3D\nChosen Option: ")
+    def refinementRate(df, exponent):
+        
         if exponent == "1":
             df.eval('h = (Volume[0]/Elements)**(1/2)', inplace=True)
         elif exponent == "2":
@@ -148,13 +154,14 @@ def run(nVar, var, axis):
         return df
 
     # Refinement rate
-    infoDf = refinementRate(infoDf)
+    infoDf = refinementRate(infoDf, dimension)
     
     # Data Processing
     simData = dict()
     for ii in range(3):
         variable = simDf['Mesh '+str(ii)][var]
-        variable.index = simDf['Mesh '+str(ii)][axis]
+        if dimension == "2":
+            variable.index = simDf['Mesh '+str(ii)][axis]
         variable.name = "Mesh "+str(ii)
         simData['Mesh '+str(ii)] = variable
         
@@ -173,27 +180,25 @@ def run(nVar, var, axis):
     sign = np.sign(desiredVar['e32']/desiredVar['e21'])
     desiredVar['Sign'] = sign
 
-    # p 
-#    p = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+order)/np.log(infoDf.r[0]))
-
     # Error Order
     initial = np.repeat(2.0, len(desiredVar.index))
     
-    def aparentOrder(order, df):
+    # Minimises the error to estimate the value or order
+    def aparentOrder(order, df, meshInfo):
         order = np.abs(order)
-        q = np.log(((infoDf.r[0]**order)-desiredVar.Sign)/((desiredVar.r[1]**order)-desiredVar.Sign))
-        ap = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+q))/np.log(infoDf.r[0])
+        q = np.log(((meshInfo.r[0]**order)-df.Sign)/((meshInfo.r[1]**order)-df.Sign))
+        ap = np.abs(np.log(np.abs(df['e32']/df['e21']))+q)/np.log(meshInfo.r[0])
         error = np.abs(order - ap)
         error = np.array(error.values.tolist()) #converts to array
         return np.mean(error)
     
-    res = minimize(aparentOrder, args=(desiredVar),
-                            x0=initial, method = 'Nelder-Mead', tol=0.01,
-                            options={'maxiter':1000})
-    
+    res = minimize(aparentOrder, args=(desiredVar, infoDf),
+                    x0=initial, method = 'CG', tol=1e-6,
+                    options={'maxiter':1000})
+    print(res.x)
     order = res.x
-    q = np.log((infoDf.r[0]**order-desiredVar.Sign)/(desiredVar.r[1]**order-desiredVar.Sign))
-    ap = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21'])+q))/np.log(infoDf.r[0])
+    q = np.log((infoDf.r[0]**order-desiredVar.Sign)/(infoDf.r[1]**order-desiredVar.Sign))
+    ap = np.abs(np.log(np.abs(desiredVar['e32']/desiredVar['e21']))+q)/np.log(infoDf.r[0])
     orderError = order - ap
     
     desiredVar['Aparent Order'] = ap
@@ -201,15 +206,15 @@ def run(nVar, var, axis):
     desiredVar['Order Error'] = orderError
     
     # Extrapolated values
-    ext21 = ((infoDf.r[0]**ap)*desiredVar.Variable_finer-desiredVar.Variable_medium)/((infoDf.r[0]**ap)-1)
-    ext32 = ((desiredVar.r[1]**ap)*desiredVar.Variable_medium-desiredVar.Variable_coarser)/((desiredVar.r[1]**ap)-1)
+    ext21 = ((infoDf.r[0]**ap)*desiredVar['Mesh 0']-desiredVar['Mesh 1'])/((infoDf.r[0]**ap)-1)
+    ext32 = ((infoDf.r[1]**ap)*desiredVar['Mesh 1']-desiredVar['Mesh 2'])/((infoDf.r[1]**ap)-1)
     
     desiredVar['Extrapolated Value (Finer, Medium)'] = ext21
     desiredVar['Extrapolated Value (Medium, Coarser)'] = ext32
     
     # Calculate and report the error estimatives
-    apxRelErr = np.abs((desiredVar.Variable_finer-desiredVar.Variable_medium)/desiredVar.Variable_finer)
-    extRelErr = np.abs((ext21-desiredVar.Variable_finer)/ext21)
+    apxRelErr = np.abs((desiredVar['Mesh 0']-desiredVar['Mesh 1'])/desiredVar['Mesh 0'])
+    extRelErr = np.abs((ext21-desiredVar['Mesh 0'])/ext21)
     gci = (1.25*apxRelErr)/((infoDf.r[0]**ap)-1)
     
     desiredVar['Aproximated Relative Error'] = apxRelErr
@@ -217,6 +222,5 @@ def run(nVar, var, axis):
     desiredVar['Grid Convergence Index'] = gci
     
     # Export generated table
-    desiredVar.to_excel("treatment/results/gci.xlsx")   
-
-
+    desiredVar.to_excel("treatment/results/gci.xlsx")
+    

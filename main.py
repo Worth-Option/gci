@@ -39,7 +39,7 @@ sys.path.append('bin/')
 start_time = time.time()
 sys.path.append('bin/')
 import gciLES
-import gci
+import gciRANS
 
 def cls():
     """
@@ -50,11 +50,14 @@ def cls():
 # Check for necessary directories
 if not os.path.exists('treatment'):
     os.makedirs('treatment')
-    print("The directory treatment/ was created, please populate with the "
+    testType = input("""Is the analysis for multiple values (lines) or points?
+[1] Lines
+[2] Points
+Choice: """)
+    if testType == "1":
+        print("The directory treatment/ was created, please populate with the "
           "desired csv files to be analysed.")
-    sys.exit('The directory treatment/ did not exist.')
-elif not os.listdir('treatment'):
-    sys.exit('The directory treatment/ is empty.')
+        sys.exit('The directory treatment/ did not exist.')
     
 # Clear the previous results directories
 if os.path.exists('treatment/results'):
@@ -62,7 +65,7 @@ if os.path.exists('treatment/results'):
 os.makedirs('treatment/results')
 
 #     .run(testVersion, nVar, var, axis)
-gci.run(2,'u', "(y-y0)/H")
+gciRANS.run()
 #gciLES.run(3, 2, 'u', "(y-y0)/H")
 
 ##analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
@@ -74,4 +77,6 @@ gci.run(2,'u', "(y-y0)/H")
 ##    exec(open("bin/gci.py").read());
 ##else:
 ##    # Grid Convergence Analysis (LES)
-##    
+##
+print("""All done
+Please check folder treatment/results""")   
