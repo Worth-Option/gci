@@ -2,24 +2,24 @@
 # -*- coding: utf-8 -*-
 #
 #  main.py
-#  
+#
 #  Copyright 2020 Luiz Oliveira
-#  
+#
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 2 of the License, or
 #  (at your option) any later version.
-#  
+#
 #  This program is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
-#  
+#
 #  You should have received a copy of the GNU General Public License
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
-#  
+#
 
 """
 Main module
@@ -33,13 +33,13 @@ import sys
 import os
 import shutil
 import time
-# Imports modules
-sys.path.append('bin/')
 
-start_time = time.time()
+# Imports modules
 sys.path.append('bin/')
 import gciLES
 import gciRANS
+
+start_time = time.time()
 
 def cls():
     """
@@ -58,15 +58,15 @@ Choice: """)
         print("The directory treatment/ was created, please populate with the "
           "desired csv files to be analysed.")
         sys.exit('The directory treatment/ did not exist.')
-    
+
 # Clear the previous results directories
 if os.path.exists('treatment/results'):
     shutil.rmtree('treatment/results')
 os.makedirs('treatment/results')
 
 #     .run(testVersion, nVar, var, axis)
-gciRANS.run()
-#gciLES.run(3, 2, 'u', "(y-y0)/H")
+#gciRANS.run()
+gciLES.run(3, 1, 'u', "(y-y0)/H")
 
 ##analysisType = input("Type of Analysis\n[1] RANS\n[2] LES\nChosen Option: ")
 ##
@@ -78,5 +78,7 @@ gciRANS.run()
 ##else:
 ##    # Grid Convergence Analysis (LES)
 ##
+cls()
 print("""All done
-Please check folder treatment/results""")   
+Please check folder treatment/results
+Execution Time %.3f seconds""" %(time.time() - start_time))
